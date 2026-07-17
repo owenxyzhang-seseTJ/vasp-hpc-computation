@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hpc-monitor: Check Slurm job status on the HPC via WSL relay.
+# hpc-monitor: Check Slurm job status on the HPC over a direct SSH connection.
 # Usage: hpc-monitor [job-id-pattern]
 #   Without args: shows all running/pending jobs for HPC_USER.
 #   With pattern: filters by job ID or job name.

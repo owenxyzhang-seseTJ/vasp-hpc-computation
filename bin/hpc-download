@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# hpc-download: Download files from the HPC via WSL relay.
+# hpc-download: Download files from the HPC over a direct SSH connection.
 # Usage: hpc-download <remote-path> <local-path>
-#   Two-stage transfer: HPC -> WSL relay -> macOS.
 #
 # Example:
 #   hpc-download /home/${HPC_USER}/data/vasp_project/host/OUTCAR ./
@@ -21,14 +20,8 @@ fi
 
 REMOTE_PATH="$1"
 LOCAL_PATH="$2"
-TMP_DIR="/tmp/hpc-download-$(date +%s)-$$"
 
-echo "Stage 1: HPC -> WSL relay (${HPC_HOST}:${REMOTE_PATH})"
-wsl_exec mkdir -p "$TMP_DIR"
-ssh "$WSL_HOST" "scp -r $(shell_quote "${HPC_HOST}:${REMOTE_PATH}") $(shell_quote "${TMP_DIR}/")"
-
-echo "Stage 2: WSL relay -> macOS"
-scp -r "${WSL_HOST}:${TMP_DIR}/" "${LOCAL_PATH}"
-wsl_exec rm -rf "$TMP_DIR"
+echo "Downloading from ${HPC_HOST}:${REMOTE_PATH}"
+scp -r "${HPC_HOST}:${REMOTE_PATH}" "${LOCAL_PATH}"
 
 echo "Download complete."

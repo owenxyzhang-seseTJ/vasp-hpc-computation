@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hpc-submit: Submit Slurm jobs to the HPC via WSL relay.
+# hpc-submit: Submit Slurm jobs to the HPC over a direct SSH connection.
 # Usage: hpc-submit <job-dir> [sbatch-options]
 #   job-dir: HPC directory containing submit.sh and calculation inputs.
 #

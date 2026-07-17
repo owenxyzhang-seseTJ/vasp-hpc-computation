@@ -1,6 +1,6 @@
 ---
 name: vasp-hpc-computation
-description: Framework-agnostic skill that turns porous-material RASPA / VASP / CI-NEB theoretical-computation tasks into auditable, semi-automated workflows on an HPC cluster accessed through a macOS → WSL → HPC SSH relay. Covers adsorption energies, diffusion barriers, async job submission and tracking, monitoring, repair, and output parsing.
+description: Framework-agnostic skill that turns porous-material RASPA / VASP / CI-NEB theoretical-computation tasks into auditable, semi-automated workflows on an HPC cluster accessed over a direct SSH connection. Covers adsorption energies, diffusion barriers, async job submission and tracking, monitoring, repair, and output parsing.
 framework_agnostic: true
 ---
 
@@ -24,7 +24,7 @@ directories that ship alongside this file.
   system prompt and add `bin/` to `PATH`.
 
 Required user-side configuration (env vars or `~/.config/vasp-hpc-computation/env`):
-`WSL_HOST`, `HPC_HOST`, `HPC_USER`. See `.env.example` and the README.
+`HPC_HOST`, `HPC_USER`. See `.env.example` and the README.
 
 ## Core principle
 
@@ -43,29 +43,27 @@ barriers.
 
 ## SSH connection to the HPC
 
-Connection chain: **macOS → WSL relay → HPC login node**
+Connection: **workstation → HPC login node** over a direct SSH alias.
 
-All SSH/rsync/scp commands originate from macOS, relay through a WSL host to the
-HPC. **Never SSH directly from macOS to the HPC.**
+All SSH/scp commands go straight to the HPC login node using the SSH alias
+configured in `~/.ssh/config` (default `hpc-login`).
 
-> All connection parameters (host aliases, usernames, ports, key paths) are
-> env-overridable and **not hardcoded** anywhere in this skill. Defaults assume
-> SSH aliases `wsl-relay` (on macOS) and `hpc-login` (inside WSL). `HPC_USER`
-> is **required**. See `.env.example` and the repository README.
+> All connection parameters (host alias, username, port, key path) are
+> env-overridable and **not hardcoded** anywhere in this skill. Default SSH
+> alias is `hpc-login`. `HPC_USER` is **required**. See `.env.example` and the
+> repository README.
 
 ### Command template
 
 ```bash
 # Remote command execution
-ssh ${WSL_HOST} "ssh ${HPC_HOST} '<command>'"
+ssh ${HPC_HOST} '<command>'
 
-# Upload: macOS → WSL → HPC
-scp local_file ${WSL_HOST}:/tmp/
-ssh ${WSL_HOST} "scp /tmp/local_file ${HPC_HOST}:<remote_path>/"
+# Upload
+scp local_file ${HPC_HOST}:<remote_path>/
 
-# Download: HPC → WSL → macOS
-ssh ${WSL_HOST} "scp ${HPC_HOST}:<remote_path>/OUTCAR /tmp/"
-scp ${WSL_HOST}:/tmp/OUTCAR ./
+# Download
+scp ${HPC_HOST}:<remote_path>/OUTCAR ./
 ```
 
 ### Bundled HPC tools (`bin/`)
