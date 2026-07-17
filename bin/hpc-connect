@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# hpc-connect: SSH to the HPC through the WSL relay.
+# Usage:
+#   hpc-connect
+#   hpc-connect --check
+#   hpc-connect <command...>
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=hpc-common
+source "${SCRIPT_DIR}/hpc-common"
+
+if [[ "${1:-}" == "--check" ]]; then
+    check_relay
+    exit 0
+fi
+
+if [[ $# -eq 0 ]]; then
+    echo "Connecting to ${HPC_HOST} via ${WSL_HOST}..."
+    ssh -t "${WSL_HOST}" "ssh -t $(shell_quote "$HPC_HOST")"
+else
+    echo "Running on ${HPC_HOST}: $*"
+    hpc_exec "$@"
+fi

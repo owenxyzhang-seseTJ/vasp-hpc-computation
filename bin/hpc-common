@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Shared helpers for HPC access through the macOS -> WSL -> HPC relay.
+#
+# All connection parameters are env-overridable. Either export them in your
+# shell, or put them in the config file (default: ~/.config/vasp-hpc-computation/env)
+# and they will be sourced automatically. See .env.example for a template.
+
+set -euo pipefail
+
+# --- Optional config file sourcing -----------------------------------------
+CONFIG_FILE="${CONFIG_FILE:-${HOME}/.config/vasp-hpc-computation/env}"
+if [[ -z "${VASP_HPC_CONFIG_LOADED:-}" && -f "${CONFIG_FILE}" ]]; then
+    # shellcheck source=/dev/null
+    source "${CONFIG_FILE}"
+    VASP_HPC_CONFIG_LOADED=1
+fi
+
+# --- Connection parameters (env-overridable) -------------------------------
+# SSH alias configured in ~/.ssh/config on macOS that reaches the WSL relay.
+WSL_HOST="${WSL_HOST:-wsl-relay}"
+# SSH alias configured inside the WSL relay that reaches the HPC login node.
+HPC_HOST="${HPC_HOST:-hpc-login}"
+# HPC username. REQUIRED: no hardcoded default on purpose.
+if [[ -z "${HPC_USER:-}" ]]; then
+    cat >&2 <<EOF
+ERROR: HPC_USER is not set.
+
+Set it via an environment variable or in the config file:
+  ${CONFIG_FILE}
+
+Example:
+  export HPC_USER=your_username
+
+See .env.example for the full list of configurable parameters.
+EOF
+    exit 1
+fi
+# Root data directory on the HPC. Override if your cluster uses a different layout.
+HPC_DATA_ROOT="${HPC_DATA_ROOT:-/home/${HPC_USER}/data}"
+# Local JSONL log of submitted jobs (one JSON object per line).
+HPC_JOB_LOG="${HPC_JOB_LOG:-${HOME}/.local/share/vasp-hpc-computation/hpc-jobs.jsonl}"
+# Name of the Slurm submit script inside each job directory.
+# Real projects often use submit.slurm instead of submit.sh; override as needed.
+HPC_SUBMIT_SCRIPT="${HPC_SUBMIT_SCRIPT:-submit.sh}"
+
+# --- Helpers ---------------------------------------------------------------
+shell_quote() {
+    printf '%q' "$1"
+}
+
+join_quoted() {
+    local out="" arg
+    for arg in "$@"; do
+        if [[ -n "$out" ]]; then
+            out+=" "
+        fi
+        out+="$(shell_quote "$arg")"
+    done
+    printf '%s' "$out"
+}
+
+require_args() {
+    local count="$1"
+    local usage="$2"
+    shift 2
+    if [[ "$#" -lt "$count" ]]; then
+        echo "$usage" >&2
+        exit 1
+    fi
+}
+
+# Run a command on the HPC by hopping through the WSL relay.
+hpc_exec() {
+    local inner
+    inner="$(join_quoted "$@")"
+    ssh "$WSL_HOST" "ssh $(shell_quote "$HPC_HOST") -- $inner"
+}
+
+# Run a bash -lc script on the HPC.
+hpc_bash() {
+    local script="$1"
+    hpc_exec bash -lc "$script"
+}
+
+# Run a command directly on the WSL relay (not on the HPC).
+wsl_exec() {
+    local inner
+    inner="$(join_quoted "$@")"
+    ssh "$WSL_HOST" "$inner"
+}
+
+# Verify both hops of the relay.
+check_relay() {
+    echo "Checking WSL relay: $WSL_HOST"
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$WSL_HOST" 'echo "WSL OK: $(hostname)"'
+    echo "Checking HPC target from WSL: $HPC_HOST"
+    hpc_exec hostname
+}
+
+# Append a job record to the local JSONL log.
+record_job_jsonl() {
+    local job_id="$1"
+    local hpc_dir="$2"
+    local calc_type="${3:-vasp}"
+    local notes="${4:-submitted through vasp-hpc-computation}"
+    mkdir -p "$(dirname "$HPC_JOB_LOG")"
+    python3 - "$HPC_JOB_LOG" "$job_id" "$hpc_dir" "$calc_type" "$notes" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+path, job_id, hpc_dir, calc_type, notes = sys.argv[1:]
+row = {
+    "job_id": job_id,
+    "hpc_dir": hpc_dir,
+    "calc_type": calc_type,
+    "submit_time": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
+    "status": "submitted",
+    "notes": notes,
+}
+with open(path, "a", encoding="utf-8") as f:
+    f.write(json.dumps(row, ensure_ascii=False) + "\n")
+PY
+}

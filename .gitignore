@@ -1,0 +1,39 @@
+# Local configuration (contains connection details — never commit the real one)
+.env
+config/env
+~/.config/vasp-hpc-computation/env
+
+# Local job log
+hpc-jobs.jsonl
+*.jsonl
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# VASP run artifacts that should not be committed
+OUTCAR
+OSZICAR
+CONTCAR
+WAVECAR
+CHGCAR
+CHG
+vasp_*.out
+vasp_*.err
+neb_*.out
+neb_*.err
+slurm-*.out
+
+# Analysis outputs (generated)
+analysis/
+parsed/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~

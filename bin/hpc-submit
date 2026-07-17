@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# hpc-submit: Submit Slurm jobs to the HPC via WSL relay.
+# Usage: hpc-submit <job-dir> [sbatch-options]
+#   job-dir: HPC directory containing submit.sh and calculation inputs.
+#
+# Example:
+#   hpc-submit /home/${HPC_USER}/data/vasp_project/host
+#   hpc-submit /home/${HPC_USER}/data/vasp_project/host --dry-run
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=hpc-common
+source "${SCRIPT_DIR}/hpc-common"
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: hpc-submit <job-dir-on-hpc> [sbatch-options]"
+    echo "Example: hpc-submit /home/${HPC_USER}/data/vasp_project/host"
+    exit 1
+fi
+
+JOB_DIR="$1"
+shift
+SBATCH_ARGS=("$@")
+
+echo "Submitting Slurm job from: ${JOB_DIR} (submit script: ${HPC_SUBMIT_SCRIPT})"
+if [[ "${SBATCH_ARGS[*]:-}" == *"--dry-run"* ]]; then
+    hpc_bash "cd $(shell_quote "$JOB_DIR") && sbatch $(join_quoted "${SBATCH_ARGS[@]}") $(shell_quote "$HPC_SUBMIT_SCRIPT")"
+else
+    output="$(hpc_bash "cd $(shell_quote "$JOB_DIR") && sbatch $(join_quoted "${SBATCH_ARGS[@]}") $(shell_quote "$HPC_SUBMIT_SCRIPT")")"
+    echo "$output"
+    job_id="$(printf '%s\n' "$output" | awk '/Submitted batch job/ {print $4; exit}')"
+    if [[ -n "${job_id:-}" ]]; then
+        record_job_jsonl "$job_id" "$JOB_DIR" "vasp" "submitted by hpc-submit"
+        echo "Recorded Job ID ${job_id} in ${HPC_JOB_LOG}"
+    fi
+fi

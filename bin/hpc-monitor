@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# hpc-monitor: Check Slurm job status on the HPC via WSL relay.
+# Usage: hpc-monitor [job-id-pattern]
+#   Without args: shows all running/pending jobs for HPC_USER.
+#   With pattern: filters by job ID or job name.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=hpc-common
+source "${SCRIPT_DIR}/hpc-common"
+
+FILTER="${1:-}"
+
+echo "=== Running/Pending Jobs ==="
+if [[ -n "${FILTER}" ]]; then
+    hpc_exec squeue -u "${HPC_USER}" | head -1
+    hpc_exec squeue -u "${HPC_USER}" | grep -i "${FILTER}" || true
+else
+    hpc_exec squeue -u "${HPC_USER}"
+fi
+
+echo ""
+echo "=== Recent Completed Jobs (48h) ==="
+hpc_bash "sacct -u $(shell_quote "$HPC_USER") --starttime \$(date -d '2 days ago' '+%Y-%m-%d') --format=JobID,JobName,State,ExitCode,Elapsed,Start --noheader | head -20"
